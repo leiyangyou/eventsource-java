@@ -68,6 +68,7 @@ public class EventSourceChannelHandler extends SimpleChannelInboundHandler<Strin
     @Override
     public void channelInactive(ChannelHandlerContext context) throws Exception {
         channel = null;
+        eventSourceHandler.onClosed(reconnectOnClose);
         if (reconnectOnClose) {
             reconnect();
         }

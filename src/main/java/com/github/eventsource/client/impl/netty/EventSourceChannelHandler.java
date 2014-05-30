@@ -53,9 +53,10 @@ public class EventSourceChannelHandler extends SimpleChannelInboundHandler<Strin
     @Override
     public void channelActive(ChannelHandlerContext context) {
         HttpRequest request = new DefaultHttpRequest(HttpVersion.HTTP_1_1, HttpMethod.GET, uri.toString());
+        
         request.headers().add(Names.ACCEPT, "text/event-stream");
         request.headers().add(Names.HOST, uri.getHost());
-        request.headers().add(Names.ORIGIN, "http://" + uri.getHost());
+        request.headers().add(Names.ORIGIN, uri.getScheme() + uri.getHost());
         request.headers().add(Names.CACHE_CONTROL, "no-cache");
 
         if (lastEventId != null) {

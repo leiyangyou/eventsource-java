@@ -16,6 +16,7 @@ import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.*;
 
 import java.net.ConnectException;
+import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -149,6 +150,7 @@ public class EventSourceChannelHandler extends SimpleChannelInboundHandler<Strin
                 @Override
                 public void run(Timeout timeout) throws Exception {
                     reconnecting.set(false);
+                    bootstrap.remoteAddress(new InetSocketAddress(uri.getHost(), uri.getPort()));
                     bootstrap.connect().await();
                 }
             }, reconnectionTimeMillis, TimeUnit.MILLISECONDS);

@@ -31,6 +31,29 @@ public class EventSource  {
 
     private int readyState = CLOSED;
 
+    private EventSourceHandler readyStateHandler = new EventSourceHandler() {
+        @Override
+        public void onConnect() throws Exception {
+            eventSourceHandler.onConnect();
+        }
+
+        @Override
+        public void onMessage(String event, MessageEvent message) throws Exception {
+            eventSourceHandler.onMessage(event, message);
+        }
+
+        @Override
+        public void onError(Throwable t) {
+            eventSourceHandler.onError(t);
+        }
+
+        @Override
+        public void onClosed(boolean willReconnect) {
+            readyState = CLOSED;
+            eventSourceHandler.onClosed(willReconnect);
+        }
+    };
+
     /**
      * Creates a new <a href="http://dev.w3.org/html5/eventsource/">EventSource</a> client. The client will reconnect on 
      * lost connections automatically, unless the connection is closed explicitly by a call to 
@@ -49,8 +72,8 @@ public class EventSource  {
 
         bootstrap = new Bootstrap();
         this.eventSourceHandler = eventSourceHandler;
-        clientHandler = new EventSourceChannelHandler(new AsyncEventSourceHandler(executor, eventSourceHandler),
-                                                      reconnectionTimeMillis, bootstrap, uri);
+
+        clientHandler = new EventSourceChannelHandler(new AsyncEventSourceHandler(executor, readyStateHandler), reconnectionTimeMillis, bootstrap, uri);
 
         bootstrap.
             group(group).
@@ -101,6 +124,7 @@ public class EventSource  {
         readyState = CONNECTING;
 
         final ChannelFuture cf = bootstrap.connect();
+
         cf.addListener(new ChannelFutureListener() {
             @Override
             public void operationComplete(ChannelFuture future) throws Exception {
@@ -114,6 +138,7 @@ public class EventSource  {
                 }
             }
         });
+
         return cf.sync();
     }
 

@@ -5,8 +5,8 @@ import org.junit.Before;
 import org.junit.Ignore;
 import org.junit.Test;
 import org.webbitserver.EventSourceConnection;
-import org.webbitserver.EventSourceMessage;
 import org.webbitserver.WebServer;
+import org.webbitserver.netty.contrib.EventSourceMessage;
 
 import java.io.IOException;
 import java.net.URI;
@@ -31,7 +31,7 @@ public class EventSourceClientTest {
     @After
     public void die() throws IOException, InterruptedException, TimeoutException, ExecutionException {
         eventSource.close().join();
-        webServer.stop().get(5, TimeUnit.SECONDS);
+        webServer.stop().join();
     }
 
     @Test
@@ -104,13 +104,18 @@ public class EventSourceClientTest {
                 System.out.println("ERROR: " + t);
                 errorCountdown.countDown();
             }
+
+            @Override
+            public void onClosed(boolean willReconnect) {
+
+            }
         });
         eventSource.connect();
 
         assertTrue("Didn't get 1st message", messageOneCountdown.await(1000, TimeUnit.MILLISECONDS));
 
         System.out.println("Stopping server..");
-        webServer.stop().get(5, TimeUnit.SECONDS);
+        webServer.stop().join();
         System.out.println("Stopped");
         System.out.println("KILLED");
 
@@ -154,7 +159,12 @@ public class EventSourceClientTest {
             public void onError(Throwable t) {
                 errorCountdown.countDown();
             }
-        });
+
+                                          @Override
+                                          public void onClosed(boolean willReconnect) {
+
+                                          }
+                                      });
         try {
             eventSource.connect();
         } catch (Throwable t) {
@@ -178,8 +188,7 @@ public class EventSourceClientTest {
                     public void onClose(EventSourceConnection connection) throws Exception {
                     }
                 })
-                .start().
-                get(4, TimeUnit.SECONDS);
+                .start().join();
         System.out.println("SSE server is listening on " + webServer.getUri());
     }
 }

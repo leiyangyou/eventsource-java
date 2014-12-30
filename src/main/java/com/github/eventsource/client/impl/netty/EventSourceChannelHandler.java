@@ -18,6 +18,9 @@ import io.netty.util.*;
 import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
@@ -41,6 +44,7 @@ public class EventSourceChannelHandler extends SimpleChannelInboundHandler<Strin
     private boolean headerDone;
     private Integer status;
     private AtomicBoolean reconnecting = new AtomicBoolean(false);
+    private Map<String, String> headers = new HashMap<String, String>();
 
     public EventSourceChannelHandler(EventSourceHandler eventSourceHandler, long reconnectionTimeMillis, Bootstrap bootstrap, URI uri) {
         this.eventSourceHandler = eventSourceHandler;
@@ -58,6 +62,10 @@ public class EventSourceChannelHandler extends SimpleChannelInboundHandler<Strin
         request.headers().add(Names.HOST, uri.getHost());
         request.headers().add(Names.ORIGIN, uri.getScheme() + uri.getHost());
         request.headers().add(Names.CACHE_CONTROL, "no-cache");
+
+        for (Map.Entry<String, String> e : headers.entrySet()) {
+            request.headers().add(e.getKey(), e.getValue());
+        }
 
         if (lastEventId != null) {
             request.headers().add("Last-Event-ID", lastEventId);
@@ -123,6 +131,7 @@ public class EventSourceChannelHandler extends SimpleChannelInboundHandler<Strin
         context.channel().close();
     }
 
+    @Override
     public void setReconnectionTimeMillis(long reconnectionTimeMillis) {
         this.reconnectionTimeMillis = reconnectionTimeMillis;
     }
@@ -130,6 +139,10 @@ public class EventSourceChannelHandler extends SimpleChannelInboundHandler<Strin
     @Override
     public void setLastEventId(String lastEventId) {
         this.lastEventId = lastEventId;
+    }
+
+    public void withHeader(String name, String value) {
+        this.headers.put(name, value);
     }
 
     public EventSourceChannelHandler close() {

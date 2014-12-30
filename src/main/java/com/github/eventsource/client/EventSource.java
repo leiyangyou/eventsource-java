@@ -14,11 +14,12 @@ import io.netty.handler.codec.string.StringDecoder;
 
 import java.net.InetSocketAddress;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
 
 public class EventSource  {
-    public static final long DEFAULT_RECONNECTION_TIME_MILLIS = 2000;
+    public static final long DEFAULT_RECONNECTION_TIME_MILLIS = 10000;
 
     public static final int CONNECTING = 0;
     public static final int OPEN = 1;
@@ -69,8 +70,27 @@ public class EventSource  {
             });
     }
 
-    public EventSource(String uri, EventSourceHandler eventSourceHandler) {
-        this(URI.create(uri), eventSourceHandler);
+    private static int getPort(URI uri) {
+        String scheme = uri.getScheme();
+        if (scheme.equals("http")) {
+            return 80;
+        } else if (scheme.equals("https")) {
+            return 443;
+        }
+        return -1;
+    }
+
+    private static URI createURI(String url) {
+        URI uri = URI.create(url);
+        try {
+            return new URI(uri.getScheme(), uri.getUserInfo(), uri.getHost(), getPort(uri), uri.getPath(), uri.getQuery(), uri.getFragment());
+        } catch (URISyntaxException e) {
+            throw new IllegalArgumentException(e.getMessage());
+        }
+    }
+
+    public EventSource(String url, EventSourceHandler eventSourceHandler) {
+        this(createURI(url), eventSourceHandler);
     }
 
     public EventSource(URI uri, EventSourceHandler eventSourceHandler) {

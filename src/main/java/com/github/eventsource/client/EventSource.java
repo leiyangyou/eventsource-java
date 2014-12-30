@@ -28,7 +28,7 @@ public class EventSource  {
     private final EventSourceHandler eventSourceHandler;
     private final EventSourceChannelHandler clientHandler;
 
-    private int readyState;
+    private int readyState = CLOSED;
 
     /**
      * Creates a new <a href="http://dev.w3.org/html5/eventsource/">EventSource</a> client. The client will reconnect on 
@@ -116,5 +116,17 @@ public class EventSource  {
     public EventSource join() throws InterruptedException {
         clientHandler.join();
         return this;
+    }
+
+    public void setLastEventId(String id) {
+        clientHandler.setLastEventId(id);
+    }
+
+    public void withHeader(String header, String value) {
+        clientHandler.withHeader(header, value);
+    }
+
+    public int getReadyState() {
+        return readyState;
     }
 }

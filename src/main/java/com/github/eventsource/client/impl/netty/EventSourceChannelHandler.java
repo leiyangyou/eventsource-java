@@ -25,7 +25,7 @@ import java.util.regex.Pattern;
 
 public class EventSourceChannelHandler extends SimpleChannelInboundHandler<String> implements ConnectionHandler {
     private static final Pattern STATUS_PATTERN = Pattern.compile("HTTP/1.1 (\\d+) (.*)");
-    private static final Pattern CONTENT_TYPE_PATTERN = Pattern.compile("Content-Type: text/event-stream");
+    private static final Pattern CONTENT_TYPE_PATTERN = Pattern.compile("Content-Type: text/event-stream(;.*)?", Pattern.CASE_INSENSITIVE);
 
     private final EventSourceHandler eventSourceHandler;
     private final Bootstrap bootstrap;
@@ -70,7 +70,11 @@ public class EventSourceChannelHandler extends SimpleChannelInboundHandler<Strin
     @Override
     public void channelInactive(ChannelHandlerContext context) throws Exception {
         channel = null;
-        eventSourceHandler.onClosed(reconnectOnClose);
+
+        if (eventStreamOk) {
+            eventSourceHandler.onClosed(reconnectOnClose);
+        }
+
         if (reconnectOnClose) {
             reconnect();
         }
@@ -112,7 +116,6 @@ public class EventSourceChannelHandler extends SimpleChannelInboundHandler<Strin
 
     @Override
     public void exceptionCaught(ChannelHandlerContext context, Throwable error) throws Exception {
-        System.out.println("in exceptionCaught");
         if(error instanceof ConnectException) {
             error = new EventSourceException("Failed to connect to " + uri, error);
         }
@@ -145,8 +148,9 @@ public class EventSourceChannelHandler extends SimpleChannelInboundHandler<Strin
     }
 
     private void reconnect() {
-        if(!reconnecting.get()) {
-            reconnecting.set(true);
+        if(reconnecting.compareAndSet(false, true)) {
+            headerDone = false;
+            eventStreamOk = false;
             timer.newTimeout(new TimerTask() {
                 @Override
                 public void run(Timeout timeout) throws Exception {

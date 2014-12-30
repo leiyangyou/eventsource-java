@@ -21,7 +21,6 @@ import java.net.InetSocketAddress;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.regex.Matcher;
@@ -37,7 +36,7 @@ public class EventSourceChannelHandler extends SimpleChannelInboundHandler<Strin
     private final URI uri;
     private final EventStreamParser messageDispatcher;
 
-    private final Timer timer = new HashedWheelTimer();
+    private static final Timer TIMER = new HashedWheelTimer();
     private Channel channel;
     private boolean reconnectOnClose = true;
     private long reconnectionTimeMillis;
@@ -166,7 +165,7 @@ public class EventSourceChannelHandler extends SimpleChannelInboundHandler<Strin
         if(reconnecting.compareAndSet(false, true)) {
             headerDone = false;
             eventStreamOk = false;
-            timer.newTimeout(new TimerTask() {
+            TIMER.newTimeout(new TimerTask() {
                 @Override
                 public void run(Timeout timeout) throws Exception {
                     reconnecting.set(false);

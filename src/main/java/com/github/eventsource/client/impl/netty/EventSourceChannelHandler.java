@@ -8,11 +8,16 @@ import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.DefaultHttpRequest;
+import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpHeaders.Names;
+import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
+import io.netty.handler.codec.http.HttpResponse;
+import io.netty.handler.codec.http.HttpResponseStatus;
 import io.netty.handler.codec.http.HttpVersion;
 import io.netty.util.*;
 
@@ -27,7 +32,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 @ChannelHandler.Sharable
-public class EventSourceChannelHandler extends SimpleChannelInboundHandler<String> implements ConnectionHandler {
+public class EventSourceChannelHandler extends ChannelInboundHandlerAdapter implements ConnectionHandler {
     private static final Pattern STATUS_PATTERN = Pattern.compile("HTTP/1.1 (\\d+) (.*)");
     private static final Pattern CONTENT_TYPE_PATTERN = Pattern.compile("Content-Type: text/event-stream(;.*)?", Pattern.CASE_INSENSITIVE);
 
@@ -90,36 +95,31 @@ public class EventSourceChannelHandler extends SimpleChannelInboundHandler<Strin
     }
 
     @Override
-    protected void channelRead0(ChannelHandlerContext ctx, String line) throws Exception {
-        if (status == null) {
-            Matcher statusMatcher = STATUS_PATTERN.matcher(line);
-            if (statusMatcher.matches()) {
-                status = Integer.parseInt(statusMatcher.group(1));
-                if (status != 200) {
-                    eventSourceHandler.onError(new EventSourceException("Bad status from " + uri + ": " + status));
-                    reconnect();
-                }
-                return;
-            } else {
-                eventSourceHandler.onError(new EventSourceException("Not HTTP? " + uri + ": " + line));
+    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
+        if (msg instanceof HttpResponse) {
+            HttpResponse httpMessage = (HttpResponse)msg;
+
+            if (!HttpVersion.HTTP_1_1.equals(httpMessage.protocolVersion())) {
+                eventSourceHandler.onError(new EventSourceException("Not HTTP 1.1 " + uri));
+            }
+
+            if (!HttpResponseStatus.OK.equals(httpMessage.status())) {
+                eventSourceHandler.onError(new EventSourceException("Bad status from " + uri + ": " + httpMessage.getStatus()));
                 reconnect();
+                return;
             }
-        }
-        if (!headerDone) {
-            if (CONTENT_TYPE_PATTERN.matcher(line).matches()) {
-                eventStreamOk = true;
+
+            if (!"text/event-stream".equals(httpMessage.headers().get(HttpHeaders.Names.CONTENT_TYPE))) {
+                eventSourceHandler.onError(new EventSourceException("Not event stream: " + uri + " (expected Content-Type: text/event-stream"));
+                reconnect();
+                return;
             }
-            if (line.isEmpty()) {
-                headerDone = true;
-                if (eventStreamOk) {
-                    eventSourceHandler.onConnect();
-                } else {
-                    eventSourceHandler.onError(new EventSourceException("Not event stream: " + uri + " (expected Content-Type: text/event-stream"));
-                    reconnect();
-                }
-            }
+
+            eventSourceHandler.onConnect();
+        } else if (msg instanceof String) {
+            messageDispatcher.line((String)msg);
         } else {
-            messageDispatcher.line(line);
+            ctx.fireChannelRead(msg);
         }
     }
 

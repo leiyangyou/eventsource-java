@@ -1,6 +1,7 @@
 package com.github.eventsource.client;
 
 import com.github.eventsource.client.impl.AsyncEventSourceHandler;
+import com.github.eventsource.client.impl.EventSourceAggregator;
 import com.github.eventsource.client.impl.netty.EventSourceChannelHandler;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.*;
@@ -9,7 +10,9 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.DelimiterBasedFrameDecoder;
 import io.netty.handler.codec.Delimiters;
+import io.netty.handler.codec.http.HttpChunkedInput;
 import io.netty.handler.codec.http.HttpRequestEncoder;
+import io.netty.handler.codec.http.HttpResponseDecoder;
 import io.netty.handler.codec.string.StringDecoder;
 
 import java.net.InetSocketAddress;
@@ -85,6 +88,8 @@ public class EventSource  {
                 @Override
                 public void initChannel(SocketChannel channel) throws Exception {
                     ChannelPipeline pipeline = channel.pipeline();
+                    pipeline.addLast("decoder", new HttpResponseDecoder());
+                    pipeline.addLast("aggregator", new EventSourceAggregator());
                     pipeline.addLast("line", new DelimiterBasedFrameDecoder(Integer.MAX_VALUE, Delimiters.lineDelimiter()));
                     pipeline.addLast("string", new StringDecoder());
                     pipeline.addLast("encoder", new HttpRequestEncoder());

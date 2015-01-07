@@ -47,8 +47,6 @@ public class EventSourceChannelHandler extends ChannelInboundHandlerAdapter impl
     private long reconnectionTimeMillis;
     private String lastEventId;
     private boolean eventStreamOk;
-    private boolean headerDone;
-    private Integer status;
     private AtomicBoolean reconnecting = new AtomicBoolean(false);
     private Map<String, String> headers = new HashMap<String, String>();
 
@@ -115,6 +113,7 @@ public class EventSourceChannelHandler extends ChannelInboundHandlerAdapter impl
                 return;
             }
 
+            eventStreamOk = true;
             eventSourceHandler.onConnect();
         } else if (msg instanceof String) {
             messageDispatcher.line((String)msg);
@@ -163,7 +162,6 @@ public class EventSourceChannelHandler extends ChannelInboundHandlerAdapter impl
 
     private void reconnect() {
         if(reconnecting.compareAndSet(false, true)) {
-            headerDone = false;
             eventStreamOk = false;
             TIMER.newTimeout(new TimerTask() {
                 @Override

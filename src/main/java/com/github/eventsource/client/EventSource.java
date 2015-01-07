@@ -20,6 +20,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class EventSource  {
     public static final long DEFAULT_RECONNECTION_TIME_MILLIS = 10000;
@@ -32,30 +33,8 @@ public class EventSource  {
     private final EventSourceHandler eventSourceHandler;
     private final EventSourceChannelHandler clientHandler;
 
-    private int readyState = CLOSED;
-
-    private EventSourceHandler readyStateHandler = new EventSourceHandler() {
-        @Override
-        public void onConnect() throws Exception {
-            eventSourceHandler.onConnect();
-        }
-
-        @Override
-        public void onMessage(String event, MessageEvent message) throws Exception {
-            eventSourceHandler.onMessage(event, message);
-        }
-
-        @Override
-        public void onError(Throwable t) {
-            eventSourceHandler.onError(t);
-        }
-
-        @Override
-        public void onClosed(boolean willReconnect) {
-            readyState = CLOSED;
-            eventSourceHandler.onClosed(willReconnect);
-        }
-    };
+    private AtomicInteger readyState = new AtomicInteger(CLOSED);
+    private ChannelFuture connectFuture;
 
     /**
      * Creates a new <a href="http://dev.w3.org/html5/eventsource/">EventSource</a> client. The client will reconnect on 
@@ -76,7 +55,7 @@ public class EventSource  {
         bootstrap = new Bootstrap();
         this.eventSourceHandler = eventSourceHandler;
 
-        clientHandler = new EventSourceChannelHandler(new AsyncEventSourceHandler(executor, readyStateHandler), reconnectionTimeMillis, bootstrap, uri);
+        clientHandler = new EventSourceChannelHandler(new AsyncEventSourceHandler(executor, eventSourceHandler), reconnectionTimeMillis, bootstrap, uri);
 
         bootstrap.
             group(group).
@@ -126,25 +105,28 @@ public class EventSource  {
     }
 
     public ChannelFuture connect() throws InterruptedException {
-        readyState = CONNECTING;
+        if (readyState.compareAndSet(CLOSED, CONNECTING)) {
+            final ChannelFuture cf = bootstrap.connect();
 
-        final ChannelFuture cf = bootstrap.connect();
-
-        cf.addListener(new ChannelFutureListener() {
-            @Override
-            public void operationComplete(ChannelFuture future) throws Exception {
-                if(future.isSuccess()) {
-                    readyState = OPEN;
-                } else {
-                    readyState = CLOSED;
-                    if(future.cause() != null) {
-                        eventSourceHandler.onError(future.cause());
+            cf.addListener(new ChannelFutureListener() {
+                @Override
+                public void operationComplete(ChannelFuture future) throws Exception {
+                    if(future.isSuccess()) {
+                        readyState.set(OPEN);
+                    } else {
+                        readyState.set(CLOSED);
+                        if(future.cause() != null) {
+                            eventSourceHandler.onError(future.cause());
+                        }
                     }
                 }
-            }
-        });
+            });
 
-        return cf.sync();
+            connectFuture = cf.sync();
+
+        }
+
+        return connectFuture;
     }
 
     /**
@@ -153,6 +135,8 @@ public class EventSource  {
      * @return self
      */
     public EventSource close() {
+        readyState.set(CLOSED);
+        connectFuture = null;
         clientHandler.close();
         return this;
     }
@@ -177,6 +161,6 @@ public class EventSource  {
     }
 
     public int getReadyState() {
-        return readyState;
+        return readyState.get();
     }
 }

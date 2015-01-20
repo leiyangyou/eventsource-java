@@ -105,6 +105,8 @@ public class EventSource  {
     }
 
     public ChannelFuture connect() throws InterruptedException {
+        clientHandler.setReconnectOnClose(true);
+
         if (readyState.compareAndSet(CLOSED, CONNECTING)) {
             final ChannelFuture cf = bootstrap.connect();
 
@@ -135,6 +137,7 @@ public class EventSource  {
      * @return self
      */
     public EventSource close() {
+        clientHandler.setReconnectOnClose(false);
         readyState.set(CLOSED);
         connectFuture = null;
         clientHandler.close();

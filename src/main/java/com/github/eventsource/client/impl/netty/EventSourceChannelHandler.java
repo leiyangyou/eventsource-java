@@ -33,9 +33,6 @@ import java.util.regex.Pattern;
 
 @ChannelHandler.Sharable
 public class EventSourceChannelHandler extends ChannelInboundHandlerAdapter implements ConnectionHandler {
-    private static final Pattern STATUS_PATTERN = Pattern.compile("HTTP/1.1 (\\d+) (.*)");
-    private static final Pattern CONTENT_TYPE_PATTERN = Pattern.compile("Content-Type: text/event-stream(;.*)?", Pattern.CASE_INSENSITIVE);
-
     private final EventSourceHandler eventSourceHandler;
     private final Bootstrap bootstrap;
     private final URI uri;
@@ -145,8 +142,11 @@ public class EventSourceChannelHandler extends ChannelInboundHandlerAdapter impl
         this.headers.put(name, value);
     }
 
+    public void setReconnectOnClose(boolean reconnectOnClose) {
+        this.reconnectOnClose = reconnectOnClose;
+    }
+
     public EventSourceChannelHandler close() {
-        reconnectOnClose = false;
         if (channel != null) {
             channel.close();
         }

@@ -10,10 +10,10 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioSocketChannel;
 import io.netty.handler.codec.DelimiterBasedFrameDecoder;
 import io.netty.handler.codec.Delimiters;
-import io.netty.handler.codec.http.HttpChunkedInput;
 import io.netty.handler.codec.http.HttpRequestEncoder;
 import io.netty.handler.codec.http.HttpResponseDecoder;
 import io.netty.handler.codec.string.StringDecoder;
+import io.netty.util.concurrent.Future;
 
 import java.net.InetSocketAddress;
 import java.net.URI;
@@ -34,7 +34,6 @@ public class EventSource  {
     private final EventSourceChannelHandler clientHandler;
 
     private AtomicInteger readyState = new AtomicInteger(CLOSED);
-    private ChannelFuture connectFuture;
 
     /**
      * Creates a new <a href="http://dev.w3.org/html5/eventsource/">EventSource</a> client. The client will reconnect on 
@@ -53,6 +52,7 @@ public class EventSource  {
         EventLoopGroup group = new NioEventLoopGroup();
 
         bootstrap = new Bootstrap();
+
         this.eventSourceHandler = eventSourceHandler;
 
         clientHandler = new EventSourceChannelHandler(new AsyncEventSourceHandler(executor, eventSourceHandler), reconnectionTimeMillis, bootstrap, uri);
@@ -104,7 +104,7 @@ public class EventSource  {
         this(Executors.newSingleThreadExecutor(), DEFAULT_RECONNECTION_TIME_MILLIS, uri, eventSourceHandler);
     }
 
-    public ChannelFuture connect() throws InterruptedException {
+    public EventSource connect() {
         clientHandler.setReconnectOnClose(true);
 
         if (readyState.compareAndSet(CLOSED, CONNECTING)) {
@@ -124,11 +124,10 @@ public class EventSource  {
                 }
             });
 
-            connectFuture = cf.sync();
-
+            cf.syncUninterruptibly();
         }
 
-        return connectFuture;
+        return this;
     }
 
     /**
@@ -139,7 +138,6 @@ public class EventSource  {
     public EventSource close() {
         clientHandler.setReconnectOnClose(false);
         readyState.set(CLOSED);
-        connectFuture = null;
         clientHandler.close();
         return this;
     }
@@ -155,12 +153,19 @@ public class EventSource  {
         return this;
     }
 
-    public void setLastEventId(String id) {
+    public EventSource setLastEventId(String id) {
         clientHandler.setLastEventId(id);
+        return this;
     }
 
-    public void withHeader(String header, String value) {
+    public EventSource shutdown() {
+        bootstrap.group().shutdownGracefully().syncUninterruptibly();
+        return this;
+    }
+
+    public EventSource withHeader(String header, String value) {
         clientHandler.withHeader(header, value);
+        return this;
     }
 
     public int getReadyState() {

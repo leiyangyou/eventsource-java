@@ -6,14 +6,13 @@ import com.github.eventsource.client.impl.ConnectionHandler;
 import com.github.eventsource.client.impl.EventStreamParser;
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.Channel;
+import io.netty.channel.ChannelFuture;
 import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
-import io.netty.channel.SimpleChannelInboundHandler;
 import io.netty.handler.codec.http.DefaultHttpRequest;
 import io.netty.handler.codec.http.HttpHeaders;
 import io.netty.handler.codec.http.HttpHeaders.Names;
-import io.netty.handler.codec.http.HttpMessage;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.HttpRequest;
 import io.netty.handler.codec.http.HttpResponse;
@@ -28,8 +27,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 @ChannelHandler.Sharable
 public class EventSourceChannelHandler extends ChannelInboundHandlerAdapter implements ConnectionHandler {
@@ -142,20 +139,16 @@ public class EventSourceChannelHandler extends ChannelInboundHandlerAdapter impl
         this.headers.put(name, value);
     }
 
-    public void setReconnectOnClose(boolean reconnectOnClose) {
-        this.reconnectOnClose = reconnectOnClose;
-    }
-
     public EventSourceChannelHandler close() {
         if (channel != null) {
-            channel.close();
+            channel.close().syncUninterruptibly();
         }
         return this;
     }
 
-    public EventSourceChannelHandler join() throws InterruptedException {
+    public EventSourceChannelHandler join() {
         if (channel != null) {
-            channel.closeFuture().await();
+            channel.close().awaitUninterruptibly();
         }
         return this;
     }
@@ -168,9 +161,18 @@ public class EventSourceChannelHandler extends ChannelInboundHandlerAdapter impl
                 public void run(Timeout timeout) throws Exception {
                     reconnecting.set(false);
                     bootstrap.remoteAddress(new InetSocketAddress(uri.getHost(), uri.getPort()));
-                    bootstrap.connect().await();
+                    ChannelFuture f = bootstrap.connect();
+                    f.awaitUninterruptibly();
+                    if (!f.isSuccess()) {
+                        reconnect();
+                    }
                 }
             }, reconnectionTimeMillis, TimeUnit.MILLISECONDS);
         }
+    }
+
+
+    public void setReconnectOnClose(boolean reconnectOnClose) {
+        this.reconnectOnClose = reconnectOnClose;
     }
 }

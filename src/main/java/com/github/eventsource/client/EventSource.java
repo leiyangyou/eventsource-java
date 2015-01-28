@@ -34,6 +34,7 @@ public class EventSource  {
     private final EventSourceChannelHandler clientHandler;
 
     private AtomicInteger readyState = new AtomicInteger(CLOSED);
+    private OnReadyStateChangeListener onReadyStateChangedListener;
 
     /**
      * Creates a new <a href="http://dev.w3.org/html5/eventsource/">EventSource</a> client. The client will reconnect on 
@@ -108,6 +109,7 @@ public class EventSource  {
         clientHandler.setReconnectOnClose(true);
 
         if (readyState.compareAndSet(CLOSED, CONNECTING)) {
+            dispatchOnReadyStateChanged();
             final ChannelFuture cf = bootstrap.connect();
 
             cf.addListener(new ChannelFutureListener() {
@@ -115,8 +117,10 @@ public class EventSource  {
                 public void operationComplete(ChannelFuture future) throws Exception {
                     if(future.isSuccess()) {
                         readyState.set(OPEN);
+                        dispatchOnReadyStateChanged();
                     } else {
                         readyState.set(CLOSED);
+                        dispatchOnReadyStateChanged();
                         if(future.cause() != null) {
                             eventSourceHandler.onError(future.cause());
                         }
@@ -170,5 +174,18 @@ public class EventSource  {
 
     public int getReadyState() {
         return readyState.get();
+    }
+
+    private void dispatchOnReadyStateChanged() {
+        if (this.onReadyStateChangedListener != null) {
+            this.onReadyStateChangedListener.onReadyStateChanged(getReadyState());
+        }
+    }
+    public void setOnReadyStateChangedListener(OnReadyStateChangeListener listener) {
+        this.onReadyStateChangedListener = listener;
+    }
+
+    public interface OnReadyStateChangeListener {
+        void onReadyStateChanged(int readyState);
     }
 }
